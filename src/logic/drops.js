@@ -1,3 +1,5 @@
+import { PICKUP_DISTANCE } from './inventory.js';
+
 export const DROP_ROTATION_SPEED = 2.0;
 export const DROP_GRAVITY = 20.0;
 export const DROP_INITIAL_VY = 3.0;
@@ -19,6 +21,7 @@ export class DropManager {
     this.world = world;
     this.drops = [];
     this.gravity = DROP_GRAVITY;
+    this.onPickup = null;
   }
 
   spawn(x, y, z, type) {
@@ -28,11 +31,7 @@ export class DropManager {
       y = x.y;
       x = x.x;
     }
-    const posX = Number.isInteger(x) ? x + 0.5 : x;
-    const posY = Number.isInteger(y) ? y + 0.5 : y;
-    const posZ = Number.isInteger(z) ? z + 0.5 : z;
-
-    const drop = new DropEntity(posX, posY, posZ, type);
+    const drop = new DropEntity(x, y, z, type);
     this.drops.push(drop);
     return drop;
   }
@@ -44,9 +43,28 @@ export class DropManager {
     }
   }
 
-  update(dt) {
+  update(dt, player = null, inventory = null) {
     if (!Number.isFinite(dt) || dt <= 0) {
       return;
+    }
+
+    if (player && inventory) {
+      const remainingDrops = [];
+      for (const drop of this.drops) {
+        const dx = drop.x - player.x;
+        const dy = drop.y - player.y;
+        const dz = drop.z - player.z;
+        const dist = Math.hypot(dx, dy, dz);
+        if (dist <= PICKUP_DISTANCE + 1e-9) {
+          inventory.addItem(drop.type, 1);
+          if (typeof this.onPickup === 'function') {
+            this.onPickup(drop);
+          }
+        } else {
+          remainingDrops.push(drop);
+        }
+      }
+      this.drops = remainingDrops;
     }
 
     for (const drop of this.drops) {

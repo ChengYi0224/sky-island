@@ -2,7 +2,9 @@ import { World, generateIsland } from './logic/world.js';
 import { Player } from './logic/player.js';
 import { MiningController } from './logic/mining.js';
 import { DropManager } from './logic/drops.js';
+import { Inventory } from './logic/inventory.js';
 import { WorldScene } from './render/scene.js';
+import { Hud } from './render/hud.js';
 
 const SPAWN_POS = { x: 16.5, y: 13, z: 16.5 };
 
@@ -24,6 +26,12 @@ function initGame() {
   const worldScene = new WorldScene(container, world);
   const miningController = new MiningController(world);
   const dropManager = new DropManager(world);
+  const inventory = new Inventory(9);
+  const hud = new Hud(inventory);
+
+  dropManager.onPickup = (drop) => {
+    worldScene.triggerPickup(drop.x, drop.y + 0.14, drop.z, drop.type);
+  };
 
   const keys = {
     w: false,
@@ -152,9 +160,9 @@ function initGame() {
 
     if (miningResult.broken) {
       dropManager.spawn(
-        miningResult.target.x,
-        miningResult.target.y,
-        miningResult.target.z,
+        miningResult.target.x + 0.5,
+        miningResult.target.y + 0.5,
+        miningResult.target.z + 0.5,
         miningResult.blockType
       );
       worldScene.rebuildWorldMesh();
@@ -165,8 +173,11 @@ function initGame() {
       worldScene.hideCrack();
     }
 
-    dropManager.update(dt);
+    dropManager.update(dt, playerPos, inventory);
+    hud.update();
+
     worldScene.updateDrops(dropManager.drops);
+    worldScene.updateFlyingPickups(dt, playerPos);
 
     worldScene.render();
   }

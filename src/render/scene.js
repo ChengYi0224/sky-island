@@ -113,6 +113,7 @@ export class WorldScene {
     this.scene.add(this.dropsGroup);
     this.dropMeshes = new Map();
     this.dropGeometry = new THREE.BoxGeometry(0.28, 0.28, 0.28);
+    this.flyingPickups = [];
 
     this.raycaster = new THREE.Raycaster();
     this.crosshairCenter = new THREE.Vector2(0, 0);
@@ -184,6 +185,42 @@ export class WorldScene {
       }
       mesh.position.set(drop.x, drop.y + 0.14, drop.z);
       mesh.rotation.y = drop.rotation;
+    }
+  }
+
+  triggerPickup(x, y, z, type) {
+    const mesh = this.createDropMesh(type);
+    mesh.position.set(x, y, z);
+    this.dropsGroup.add(mesh);
+    this.flyingPickups.push({
+      mesh,
+      progress: 0,
+      startX: x,
+      startY: y,
+      startZ: z,
+    });
+  }
+
+  updateFlyingPickups(dt, playerPos) {
+    for (let i = this.flyingPickups.length - 1; i >= 0; i--) {
+      const item = this.flyingPickups[i];
+      item.progress += dt / 0.18;
+      const t = Math.min(item.progress, 1);
+      const easeT = t * t * (3 - 2 * t);
+
+      const targetY = playerPos.y + 0.8;
+      item.mesh.position.x = item.startX + (playerPos.x - item.startX) * easeT;
+      item.mesh.position.y = item.startY + (targetY - item.startY) * easeT;
+      item.mesh.position.z = item.startZ + (playerPos.z - item.startZ) * easeT;
+      item.mesh.rotation.y += 12 * dt;
+
+      const scale = Math.max(0.01, 1 - t * 0.7);
+      item.mesh.scale.set(scale, scale, scale);
+
+      if (t >= 1) {
+        this.dropsGroup.remove(item.mesh);
+        this.flyingPickups.splice(i, 1);
+      }
     }
   }
 
