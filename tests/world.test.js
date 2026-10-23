@@ -48,7 +48,7 @@ describe('STEP 0: 世界資料與空島生成 (world.js)', () => {
     expect(world.isSolid(10, 12, 14)).toBe(false);
   });
 
-  it('空島生成：懸浮於空中，包含草地、泥土、石頭、沙子，且沒有建築方塊', () => {
+  it('空島生成：懸浮於空中，包含草地、泥土、石頭、沙子，（建築由 building.test.js 測）', () => {
     const world = new World();
     generateIsland(world);
 
@@ -85,9 +85,6 @@ describe('STEP 0: 世界資料與空島生成 (world.js)', () => {
     expect(counts[BLOCK_TYPES.DIRT]).toBeGreaterThan(0);
     expect(counts[BLOCK_TYPES.STONE]).toBeGreaterThan(0);
     expect(counts[BLOCK_TYPES.SAND]).toBeGreaterThan(0);
-
-    expect(counts[BLOCK_TYPES.BRICK]).toBe(0);
-    expect(counts[BLOCK_TYPES.PLANKS]).toBe(0);
 
     expect(bottomLayerSolidCount).toBe(0);
     expect(topLayerSolidCount).toBe(0);
