@@ -162,6 +162,7 @@
 
   // src/logic/player.js
   var EPS = 1e-6;
+  var TOLERANCE = 1e-4;
   var Player = class {
     constructor(world, options = {}) {
       this.world = world;
@@ -225,6 +226,7 @@
     }
     _moveX(dx) {
       if (dx === 0) return;
+      const prevX = this.x;
       this.x += dx;
       const halfW = this.width / 2;
       const minY = Math.floor(this.y + EPS);
@@ -235,6 +237,7 @@
       const maxX = Math.floor(this.x + halfW - EPS);
       if (dx > 0) {
         for (let bx = minX; bx <= maxX; bx++) {
+          if (bx < prevX + halfW - TOLERANCE) continue;
           for (let by = minY; by <= maxY; by++) {
             for (let bz = minZ; bz <= maxZ; bz++) {
               if (this.world.isSolid(bx, by, bz)) {
@@ -247,6 +250,7 @@
         }
       } else {
         for (let bx = maxX; bx >= minX; bx--) {
+          if (bx + 1 > prevX - halfW + TOLERANCE) continue;
           for (let by = minY; by <= maxY; by++) {
             for (let bz = minZ; bz <= maxZ; bz++) {
               if (this.world.isSolid(bx, by, bz)) {
@@ -261,6 +265,7 @@
     }
     _moveZ(dz) {
       if (dz === 0) return;
+      const prevZ = this.z;
       this.z += dz;
       const halfW = this.width / 2;
       const minY = Math.floor(this.y + EPS);
@@ -271,6 +276,7 @@
       const maxZ = Math.floor(this.z + halfW - EPS);
       if (dz > 0) {
         for (let bz = minZ; bz <= maxZ; bz++) {
+          if (bz < prevZ + halfW - TOLERANCE) continue;
           for (let by = minY; by <= maxY; by++) {
             for (let bx = minX; bx <= maxX; bx++) {
               if (this.world.isSolid(bx, by, bz)) {
@@ -283,6 +289,7 @@
         }
       } else {
         for (let bz = maxZ; bz >= minZ; bz--) {
+          if (bz + 1 > prevZ - halfW + TOLERANCE) continue;
           for (let by = minY; by <= maxY; by++) {
             for (let bx = minX; bx <= maxX; bx++) {
               if (this.world.isSolid(bx, by, bz)) {
@@ -296,6 +303,7 @@
       }
     }
     _moveY(dy) {
+      const prevY = this.y;
       this.y += dy;
       this.onGround = false;
       const halfW = this.width / 2;
@@ -307,6 +315,7 @@
       const maxY = Math.floor(this.y + this.height - EPS);
       if (dy <= 0) {
         for (let by = maxY; by >= minY; by--) {
+          if (by + 1 > prevY + TOLERANCE) continue;
           for (let bx = minX; bx <= maxX; bx++) {
             for (let bz = minZ; bz <= maxZ; bz++) {
               if (this.world.isSolid(bx, by, bz)) {
@@ -320,6 +329,7 @@
         }
       } else {
         for (let by = minY; by <= maxY; by++) {
+          if (by < prevY + this.height - TOLERANCE) continue;
           for (let bx = minX; bx <= maxX; bx++) {
             for (let bz = minZ; bz <= maxZ; bz++) {
               if (this.world.isSolid(bx, by, bz)) {

@@ -1,4 +1,5 @@
 const EPS = 1e-6;
+const TOLERANCE = 1e-4;
 
 export class Player {
   constructor(world, options = {}) {
@@ -77,6 +78,7 @@ export class Player {
 
   _moveX(dx) {
     if (dx === 0) return;
+    const prevX = this.x;
     this.x += dx;
     const halfW = this.width / 2;
     const minY = Math.floor(this.y + EPS);
@@ -88,6 +90,7 @@ export class Player {
 
     if (dx > 0) {
       for (let bx = minX; bx <= maxX; bx++) {
+        if (bx < prevX + halfW - TOLERANCE) continue;
         for (let by = minY; by <= maxY; by++) {
           for (let bz = minZ; bz <= maxZ; bz++) {
             if (this.world.isSolid(bx, by, bz)) {
@@ -100,6 +103,7 @@ export class Player {
       }
     } else {
       for (let bx = maxX; bx >= minX; bx--) {
+        if (bx + 1 > prevX - halfW + TOLERANCE) continue;
         for (let by = minY; by <= maxY; by++) {
           for (let bz = minZ; bz <= maxZ; bz++) {
             if (this.world.isSolid(bx, by, bz)) {
@@ -115,6 +119,7 @@ export class Player {
 
   _moveZ(dz) {
     if (dz === 0) return;
+    const prevZ = this.z;
     this.z += dz;
     const halfW = this.width / 2;
     const minY = Math.floor(this.y + EPS);
@@ -126,6 +131,7 @@ export class Player {
 
     if (dz > 0) {
       for (let bz = minZ; bz <= maxZ; bz++) {
+        if (bz < prevZ + halfW - TOLERANCE) continue;
         for (let by = minY; by <= maxY; by++) {
           for (let bx = minX; bx <= maxX; bx++) {
             if (this.world.isSolid(bx, by, bz)) {
@@ -138,6 +144,7 @@ export class Player {
       }
     } else {
       for (let bz = maxZ; bz >= minZ; bz--) {
+        if (bz + 1 > prevZ - halfW + TOLERANCE) continue;
         for (let by = minY; by <= maxY; by++) {
           for (let bx = minX; bx <= maxX; bx++) {
             if (this.world.isSolid(bx, by, bz)) {
@@ -152,6 +159,7 @@ export class Player {
   }
 
   _moveY(dy) {
+    const prevY = this.y;
     this.y += dy;
     this.onGround = false;
 
@@ -165,6 +173,7 @@ export class Player {
 
     if (dy <= 0) {
       for (let by = maxY; by >= minY; by--) {
+        if (by + 1 > prevY + TOLERANCE) continue;
         for (let bx = minX; bx <= maxX; bx++) {
           for (let bz = minZ; bz <= maxZ; bz++) {
             if (this.world.isSolid(bx, by, bz)) {
@@ -178,6 +187,7 @@ export class Player {
       }
     } else {
       for (let by = minY; by <= maxY; by++) {
+        if (by < prevY + this.height - TOLERANCE) continue;
         for (let bx = minX; bx <= maxX; bx++) {
           for (let bz = minZ; bz <= maxZ; bz++) {
             if (this.world.isSolid(bx, by, bz)) {
