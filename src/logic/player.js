@@ -21,6 +21,9 @@ export class Player {
     this.vy = 0;
     this.vz = 0;
     this.onGround = false;
+
+    this.maxHealth = options.maxHealth ?? 20;
+    this.health = options.health ?? this.maxHealth;
   }
 
   getBoundingBox(x = this.x, y = this.y, z = this.z) {

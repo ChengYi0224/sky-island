@@ -180,6 +180,8 @@
       this.vy = 0;
       this.vz = 0;
       this.onGround = false;
+      this.maxHealth = options.maxHealth ?? 20;
+      this.health = options.health ?? this.maxHealth;
     }
     getBoundingBox(x = this.x, y = this.y, z = this.z) {
       const halfW = this.width / 2;
@@ -746,6 +748,77 @@
         landed: landedCount > 0,
         landedCount
       };
+    }
+  };
+
+  // src/logic/health.js
+  var MAX_HEALTH = 20;
+  var SUFFOCATION_INTERVAL = 0.5;
+  var SUFFOCATION_DAMAGE = 1;
+  var HealthSystem = class {
+    constructor(player, world, options = {}) {
+      this.player = player;
+      this.world = world;
+      this.maxHealth = options.maxHealth ?? MAX_HEALTH;
+      this.health = options.health ?? this.maxHealth;
+      this.suffocationTimer = 0;
+      if (this.player) {
+        this.player.maxHealth = this.maxHealth;
+        this.player.health = this.health;
+      }
+    }
+    isSuffocating() {
+      if (!this.player || !this.world) {
+        return false;
+      }
+      const eyeOffset = this.player.eyeHeight ?? 1.6;
+      const hx = Math.floor(this.player.x);
+      const hy = Math.floor(this.player.y + eyeOffset);
+      const hz = Math.floor(this.player.z);
+      const isSand = this.world.getBlock(hx, hy, hz) === BLOCK_TYPES.SAND;
+      if (!isSand) {
+        this.suffocationTimer = 0;
+      }
+      return isSand;
+    }
+    takeDamage(amount) {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+      this.health = Math.max(0, this.health - amount);
+      if (this.player) {
+        this.player.health = this.health;
+      }
+    }
+    heal(amount) {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+      this.health = Math.min(this.maxHealth, this.health + amount);
+      if (this.player) {
+        this.player.health = this.health;
+      }
+    }
+    reset() {
+      this.health = this.maxHealth;
+      this.suffocationTimer = 0;
+      if (this.player) {
+        this.player.health = this.health;
+      }
+    }
+    update(dt) {
+      if (!Number.isFinite(dt) || dt <= 0) {
+        return;
+      }
+      if (!this.isSuffocating()) {
+        this.suffocationTimer = 0;
+        return;
+      }
+      this.suffocationTimer += dt;
+      while (this.suffocationTimer >= SUFFOCATION_INTERVAL - 1e-9) {
+        this.suffocationTimer = Math.max(0, this.suffocationTimer - SUFFOCATION_INTERVAL);
+        this.takeDamage(SUFFOCATION_DAMAGE);
+      }
     }
   };
 
@@ -20728,14 +20801,31 @@ void main() {
     [BLOCK_TYPES.BRICK]: brick_default2
   });
   var Hud = class {
-    constructor(inventory, container = document.body) {
+    constructor(inventory, healthSystem = null, container = document.body) {
+      if (healthSystem && healthSystem.nodeType) {
+        container = healthSystem;
+        healthSystem = null;
+      }
       this.inventory = inventory;
+      this.healthSystem = healthSystem;
       this.container = container;
       this.slotElements = [];
       this._createDom();
       this.update();
     }
+    setHealthSystem(healthSystem) {
+      this.healthSystem = healthSystem;
+      this.update();
+    }
     _createDom() {
+      let healthEl = document.getElementById("health-display");
+      if (!healthEl) {
+        healthEl = document.createElement("div");
+        healthEl.id = "health-display";
+        healthEl.className = "health-display";
+        this.container.appendChild(healthEl);
+      }
+      this.healthElement = healthEl;
       let hotbar = document.getElementById("hotbar");
       if (!hotbar) {
         hotbar = document.createElement("div");
@@ -20766,6 +20856,15 @@ void main() {
       this.hotbarElement = hotbar;
     }
     update() {
+      if (this.healthElement) {
+        if (this.healthSystem) {
+          const current = Math.max(0, Math.round(this.healthSystem.health));
+          const max = this.healthSystem.maxHealth ?? 20;
+          this.healthElement.textContent = `HP ${current}/${max}`;
+        } else {
+          this.healthElement.textContent = "HP 20/20";
+        }
+      }
       const selectedIdx = this.inventory.selectedIndex ?? 0;
       for (let i = 0; i < this.slotElements.length; i++) {
         const { slotEl, iconImg, countSpan } = this.slotElements[i];
@@ -20806,8 +20905,9 @@ void main() {
     const miningController = new MiningController(world);
     const dropManager = new DropManager(world);
     const sandManager = new SandManager(world);
+    const healthSystem = new HealthSystem(player, world);
     const inventory = new Inventory(9);
-    const hud = new Hud(inventory);
+    const hud = new Hud(inventory, healthSystem);
     dropManager.onPickup = (drop) => {
       worldScene.triggerPickup(drop.x, drop.y + 0.14, drop.z, drop.type);
     };
@@ -20984,6 +21084,7 @@ void main() {
       if (sandResult.landed) {
         worldScene.rebuildWorldMesh();
       }
+      healthSystem.update(dt);
       dropManager.update(dt, playerPos, inventory);
       hud.update();
       worldScene.updateDrops(dropManager.drops);

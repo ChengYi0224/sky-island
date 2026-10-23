@@ -264,4 +264,4 @@
 - `dist/bundle.js`
 - `PLANS.md`
 
-- [ ] 這步完成
+- [x] 這步完成

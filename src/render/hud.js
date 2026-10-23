@@ -21,8 +21,13 @@ export const ICON_MAP = Object.freeze({
 });
 
 export class Hud {
-  constructor(inventory, container = document.body) {
+  constructor(inventory, healthSystem = null, container = document.body) {
+    if (healthSystem && healthSystem.nodeType) {
+      container = healthSystem;
+      healthSystem = null;
+    }
     this.inventory = inventory;
+    this.healthSystem = healthSystem;
     this.container = container;
     this.slotElements = [];
 
@@ -30,7 +35,21 @@ export class Hud {
     this.update();
   }
 
+  setHealthSystem(healthSystem) {
+    this.healthSystem = healthSystem;
+    this.update();
+  }
+
   _createDom() {
+    let healthEl = document.getElementById('health-display');
+    if (!healthEl) {
+      healthEl = document.createElement('div');
+      healthEl.id = 'health-display';
+      healthEl.className = 'health-display';
+      this.container.appendChild(healthEl);
+    }
+    this.healthElement = healthEl;
+
     let hotbar = document.getElementById('hotbar');
     if (!hotbar) {
       hotbar = document.createElement('div');
@@ -68,6 +87,16 @@ export class Hud {
   }
 
   update() {
+    if (this.healthElement) {
+      if (this.healthSystem) {
+        const current = Math.max(0, Math.round(this.healthSystem.health));
+        const max = this.healthSystem.maxHealth ?? 20;
+        this.healthElement.textContent = `HP ${current}/${max}`;
+      } else {
+        this.healthElement.textContent = 'HP 20/20';
+      }
+    }
+
     const selectedIdx = this.inventory.selectedIndex ?? 0;
 
     for (let i = 0; i < this.slotElements.length; i++) {

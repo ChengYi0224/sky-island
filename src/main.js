@@ -4,6 +4,7 @@ import { MiningController } from './logic/mining.js';
 import { DropManager } from './logic/drops.js';
 import { Inventory } from './logic/inventory.js';
 import { SandManager } from './logic/sand.js';
+import { HealthSystem } from './logic/health.js';
 import { WorldScene } from './render/scene.js';
 import { Hud } from './render/hud.js';
 
@@ -26,8 +27,9 @@ function initGame() {
   const miningController = new MiningController(world);
   const dropManager = new DropManager(world);
   const sandManager = new SandManager(world);
+  const healthSystem = new HealthSystem(player, world);
   const inventory = new Inventory(9);
-  const hud = new Hud(inventory);
+  const hud = new Hud(inventory, healthSystem);
 
   dropManager.onPickup = (drop) => {
     worldScene.triggerPickup(drop.x, drop.y + 0.14, drop.z, drop.type);
@@ -231,6 +233,8 @@ function initGame() {
     if (sandResult.landed) {
       worldScene.rebuildWorldMesh();
     }
+
+    healthSystem.update(dt);
 
     dropManager.update(dt, playerPos, inventory);
     hud.update();
