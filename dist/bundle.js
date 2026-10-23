@@ -266,6 +266,82 @@
     }
   };
 
+  // src/logic/mining.js
+  var MAX_MINING_DISTANCE = 4;
+  var MINING_TIMES = Object.freeze({
+    [BLOCK_TYPES.DIRT]: 0.6,
+    [BLOCK_TYPES.GRASS]: 0.6,
+    [BLOCK_TYPES.SAND]: 0.6,
+    [BLOCK_TYPES.STONE]: 2,
+    [BLOCK_TYPES.LOG]: 1.5,
+    [BLOCK_TYPES.LEAVES]: 0.3,
+    [BLOCK_TYPES.PLANKS]: 1.5,
+    [BLOCK_TYPES.BRICK]: 2
+  });
+  function getDistance(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = a.z - b.z;
+    return Math.hypot(dx, dy, dz);
+  }
+  function isSameBlock(a, b) {
+    if (!a || !b) return false;
+    return a.x === b.x && a.y === b.y && a.z === b.z;
+  }
+  var MiningController = class {
+    constructor(world) {
+      this.world = world;
+      this.target = null;
+      this.progress = 0;
+      this.stage = 0;
+      this.elapsedTime = 0;
+    }
+    reset() {
+      this.target = null;
+      this.progress = 0;
+      this.stage = 0;
+      this.elapsedTime = 0;
+    }
+    update(dt, options = {}) {
+      const { isMining = false, target = null, playerPos = null } = options;
+      if (!isMining || !target || !playerPos) {
+        this.reset();
+        return { broken: false };
+      }
+      const distance = getDistance(target, playerPos);
+      if (distance > MAX_MINING_DISTANCE) {
+        this.reset();
+        return { broken: false };
+      }
+      const blockType = this.world.getBlock(target.x, target.y, target.z);
+      if (blockType === BLOCK_TYPES.AIR) {
+        this.reset();
+        return { broken: false };
+      }
+      if (!isSameBlock(this.target, target)) {
+        this.target = { x: target.x, y: target.y, z: target.z };
+        this.progress = 0;
+        this.stage = 0;
+        this.elapsedTime = 0;
+      }
+      const duration = MINING_TIMES[blockType] ?? 1;
+      this.elapsedTime += dt;
+      this.progress = Math.min(1, this.elapsedTime / duration);
+      this.stage = Math.min(9, Math.floor(this.progress * 10));
+      if (this.elapsedTime >= duration - 1e-5) {
+        const brokenTarget = { ...this.target };
+        this.world.setBlock(brokenTarget.x, brokenTarget.y, brokenTarget.z, BLOCK_TYPES.AIR);
+        this.reset();
+        return {
+          broken: true,
+          blockType,
+          target: brokenTarget
+        };
+      }
+      return { broken: false };
+    }
+  };
+
   // node_modules/three/build/three.module.js
   var REVISION = "170";
   var CullFaceNone = 0;
@@ -7108,13 +7184,13 @@
     }
   };
   function checkIntersection$1(object, material, raycaster, ray, pA, pB, pC, point) {
-    let intersect;
+    let intersect2;
     if (material.side === BackSide) {
-      intersect = ray.intersectTriangle(pC, pB, pA, true, point);
+      intersect2 = ray.intersectTriangle(pC, pB, pA, true, point);
     } else {
-      intersect = ray.intersectTriangle(pA, pB, pC, material.side === FrontSide, point);
+      intersect2 = ray.intersectTriangle(pA, pB, pC, material.side === FrontSide, point);
     }
-    if (intersect === null) return null;
+    if (intersect2 === null) return null;
     _intersectionPointWorld.copy(point);
     _intersectionPointWorld.applyMatrix4(object.matrixWorld);
     const distance = raycaster.ray.origin.distanceTo(_intersectionPointWorld);
@@ -19684,6 +19760,73 @@ void main() {
     ]
   ];
   var _controlInterpolantsResultBuffer = new Float32Array(1);
+  var _matrix = /* @__PURE__ */ new Matrix4();
+  var Raycaster = class {
+    constructor(origin, direction, near = 0, far = Infinity) {
+      this.ray = new Ray(origin, direction);
+      this.near = near;
+      this.far = far;
+      this.camera = null;
+      this.layers = new Layers();
+      this.params = {
+        Mesh: {},
+        Line: { threshold: 1 },
+        LOD: {},
+        Points: { threshold: 1 },
+        Sprite: {}
+      };
+    }
+    set(origin, direction) {
+      this.ray.set(origin, direction);
+    }
+    setFromCamera(coords, camera) {
+      if (camera.isPerspectiveCamera) {
+        this.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+        this.ray.direction.set(coords.x, coords.y, 0.5).unproject(camera).sub(this.ray.origin).normalize();
+        this.camera = camera;
+      } else if (camera.isOrthographicCamera) {
+        this.ray.origin.set(coords.x, coords.y, (camera.near + camera.far) / (camera.near - camera.far)).unproject(camera);
+        this.ray.direction.set(0, 0, -1).transformDirection(camera.matrixWorld);
+        this.camera = camera;
+      } else {
+        console.error("THREE.Raycaster: Unsupported camera type: " + camera.type);
+      }
+    }
+    setFromXRController(controller) {
+      _matrix.identity().extractRotation(controller.matrixWorld);
+      this.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+      this.ray.direction.set(0, 0, -1).applyMatrix4(_matrix);
+      return this;
+    }
+    intersectObject(object, recursive = true, intersects = []) {
+      intersect(object, this, intersects, recursive);
+      intersects.sort(ascSort);
+      return intersects;
+    }
+    intersectObjects(objects, recursive = true, intersects = []) {
+      for (let i = 0, l = objects.length; i < l; i++) {
+        intersect(objects[i], this, intersects, recursive);
+      }
+      intersects.sort(ascSort);
+      return intersects;
+    }
+  };
+  function ascSort(a, b) {
+    return a.distance - b.distance;
+  }
+  function intersect(object, raycaster, intersects, recursive) {
+    let propagate = true;
+    if (object.layers.test(raycaster.layers)) {
+      const result = object.raycast(raycaster, intersects);
+      if (result === false) propagate = false;
+    }
+    if (propagate === true && recursive === true) {
+      const children = object.children;
+      for (let i = 0, l = children.length; i < l; i++) {
+        intersect(children[i], raycaster, intersects, true);
+      }
+    }
+  }
   if (typeof __THREE_DEVTOOLS__ !== "undefined") {
     __THREE_DEVTOOLS__.dispatchEvent(new CustomEvent("register", { detail: {
       revision: REVISION
@@ -19726,6 +19869,36 @@ void main() {
 
   // assets/textures/16px/brick.png
   var brick_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAADKElEQVR4ARxTWU8TURT+5s60M22ngmjcKioJceHBGB/0xT0+umviL1ACsotVATWCLCLIpmL01Rg1xrgmxvjim4kRCWDUkBAEF0wgLKGlnen0+t1OeqbTc8+cc76l4tnR3fLdyf3y6ZHd8uHBHfLV8b3yJePRoZ3y04cX8s2JffLx4V3yPWueH9sjX/P3gwM75BPmBj++lSLkMzA2G0PA0GExTIZfF8i2/DAMAzNJB6omnvLgptNQl6YBJms0oUH8iyewLjsEHxNZph8xNwWDB34hoDMX5IB5x0VaSvDDcxfqkuoGDaIgeh7hwhJkFZUgdLoYkbIKPpcicKoILpvlVlQhvzqKNVXVWF1WjvXRC8hjLrfyLARXEd9bWzF5uxs/O27C7/dhlN8T3Z0Y6+7AYEszhttuYLyzHV8aG2GZJqaY/9HehomuDoxcb4JQuBR2hVuotYXGNVNcGYjYQSwJmAiRi7wsG4lkEqNzMSxljsMxk3AhVtkBjDM5tZCEarCIW6imCZIWJ4S/8wvwZJohEbZtZJm+zPNc0kXQp0Mo7JtrarDtyhXE4nHYhcXYcukyCs5FESHWDdXEfjaKnJIKeJ6H9ecvIp9RwHfyyI2Y6OnCYHMThpoasXCvF9O9tzBwrSHDi8MN5u7exkDjNfTzfIDxub4e422t+MZ3NI0qLHBVhXN50MKf+Th0JnMsE7PU3yQcBU15RCc3Crtl6EhwE0vX4VBe4aUlVJN4KkWjSEwnnEyjHBJlWRYUuWE2WsYBgs3VMNdLw6GpJCTE5tparKPGOUWl2H71KvKJfWtdHZacKUeKTTfW1MGmP9R5hFysrDqXqdnEvM8wIIavt2CopQWJ+73w0h5GqXE/Nf/VdRN9DQ0Ya23G5J0ejHS0I0lYfQ31mOrpRB+HfaVPRJiyRMJBTFLG+Vic+ktkM6fsq9aVABR+h2sHAxZWhgJQcG2/AY/eFuAtRjJYl9FZFWqaRr39UF5QeeWHFfRL0nHwm0TbPl/mj6e4EEvLKrGaeq9luK6LjdEolhWXIpe8rCmvxPKyKhTUXcKiwjNQDbbU1CJErywmZ8o7/wEAAP//YUJ4WgAAAAZJREFUAwCA5HMY4q4XSgAAAABJRU5ErkJggg==";
+
+  // assets/textures/16px/destroy_stage_0.png
+  var destroy_stage_0_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbklEQVR4AeyQMQ2AMBREL7hgxQYOSDCBBBY0sKAAFyRowAEiMMHrwPZ7HVjb3EuT9t8bfqOfpwokt4OL/a5g4wQ3zQVsnKCluYONE3Q00//JfUCYNBB9zDw+MMEAI4TJCTameygmJygWv4EqkF4AAAD//yv0EwwAAAAGSURBVAMAbGwIIQLvi8cAAAAASUVORK5CYII=";
+
+  // assets/textures/16px/destroy_stage_1.png
+  var destroy_stage_1_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAeElEQVR4AeyQsQmAMBBFDxtnsLUQnMENLBzCuZzCwt4pBFdwCd8VVuFfBDtJ+D8Hyf1HcpV9XD8H7G/GE82gBnDgUApwkvJwTw2lAB2pBi84lAJ4qGXz+43qr6Gk8ob01Gzl8MIzHrH8igJMhAaclQJkg09DAZjdAAAA//9TgxVdAAAABklEQVQDADMmCSH1l61kAAAAAElFTkSuQmCC";
+
+  // assets/textures/16px/destroy_stage_2.png
+  var destroy_stage_2_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAkElEQVR4AdyQPQ5AQBSEReMMWoXEVRQqtUIlcR6JwhFUCr1TSCRO4BK+kah21xa6lfk8dt/M/sTRzyfggJ6r2cAr1x0MOBPYYQSnbAEd3QfIXFD1T7HLFqAVc9pTmOBTtoDXkPGh+ZWq3cxUQ2owBhlY4IIWStBRaqohV0BF5wleuQJkbPTy8RXg8z7zAQTcAAAA///Sb72QAAAABklEQVQDAPa1DiEEECM+AAAAAElFTkSuQmCC";
+
+  // assets/textures/16px/destroy_stage_3.png
+  var destroy_stage_3_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArklEQVR4AcyPMQrCQBBFRbyErYXiNSwFsbG2sPJCooUXEGxU8AC5RCCQEwRyhrwPWciG2WwgRRL+YybZ+X8z89nAZ7oBr76bhVZICMjA6eOadg0F3BgsIYUHHMGUFSCDbpd5i+sKQVkBMqxxLOEJnbICnGFFo/M/VX/zpv7Akwa8D/XLl1rABfagVU7UA3iyAu5MLCCHqKyADS7deqZGZQXsoq7GgBXQOI634wdUAAAA//8fNAqwAAAABklEQVQDAKAKEyHbGKZxAAAAAElFTkSuQmCC";
+
+  // assets/textures/16px/destroy_stage_4.png
+  var destroy_stage_4_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAzUlEQVR4AbSPMQrCQBBFRbyErYXiDewEwUYQGzs7Ky8kWqidhaCNgr1eQhAsrAXP4PtgYHbYTZBg+C9/J5n5u1utlHz+EnD55VCxE3QJ2IHV0hZ2HQvQ/yuvO2SqZwvvqYA5jW+4gXYf4VH5gCldGtDuGm5TzyApH7ChUwNNXMde4bnyAba5QaH/Z1yn2eMnCKSG4MO3OOIv0JUGuK4yxocQKBawoKMGDyiUD9gy0YIDdKBQPmDCRA/W8IRC+QA70LdFap0XkJoJvpcO+AAAAP//qEreSAAAAAZJREFUAwBy6RghHxVgUQAAAABJRU5ErkJggg==";
+
+  // assets/textures/16px/destroy_stage_5.png
+  var destroy_stage_5_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA50lEQVR4AayQvQ4BQRSFRbyEVuHnDagkEg0RjU6iUHkKhXcQChqdhEgIPY1HIBKFWqJU+06yuxmzJiNhc769Mzv3nL27ycSP198Dtgy0h69lT1DHWYY5hOqzGMMMYrIDwoYDiwtIA25p6EBMroAhnQ84gd7epH6UHaB/IIPeLnMBVw+csgP0D2TI4tDYE6qto/nADjDPMmx0vqNqmgV1AyWIpIZoYyzWrO/QhRroU1rUBrzJDlhxOoIUXMErM0CjPnHkYAlF8MoM0KhtHBWYwg28MgPM5jObKnjlCsh7nUGDKyA49pcXAAAA//9OTHzZAAAABklEQVQDADP2HyFkhi2DAAAAAElFTkSuQmCC";
+
+  // assets/textures/16px/destroy_stage_6.png
+  var destroy_stage_6_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABBElEQVR4AaySPYoCQRCFl2WTPcKmG+xPaKaRKJgoYiIYCAZGRh7BwCMIooEmZoIiKJpr4hEUwcBYMNTU7wkjNa3DCDq8b7q6u+p1TTPvb08+LzeY0tAcgrR2N9wOMiTEoQ+eagRt6MEf+OQaeJsLgg1IdV5fUIIbBRk0yTzACnR6jvGurMGADN2BCnS6iv9Zq0CgrEGeLN2BCn6I1XaH0dWShesdWQPWffpmpv0Zo7pRhxPiGBTgIiVcAuc1Zr6HMqRBn6IOs8Q+WQMVjdhtwQdsIVTWQEVHKn5hCFEIlTX4JLsISejCDkJlDRImW79syswDQ2vgJVUJTvCQ7hk0qIzAQzoDAAD//2NxfUoAAAAGSURBVAMArwkkIRE6qEoAAAAASUVORK5CYII=";
+
+  // assets/textures/16px/destroy_stage_7.png
+  var destroy_stage_7_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABE0lEQVR4AaySLYsCURSGh2XL/oStG/YjLrthNy0rWBSxCAbBYPIPWA1Ws2jQYhMUQdGuxaJZEQxmwajV50WOOKPjCCrv4zn33HveOXOZB+fG390Negw0AD/N2MjCQd4Jouz8QQNMeZIK1OEdlBP28hrsq44zJJmDVODvGdJwIj+DEifXMAU9MU48KzNosit0B2rQ09X8Qd31zqxdMoMEVaE7UMMra41dJXo1oqA7GhMdM1Du5YWC9vtETaMJu+S/kIRv8DXosLmCDERAr6IJY+Qu6QlWUFObRRkeYQGBOjZQ04aON2jBDwTKDIqcfIIUhKAGSwiUGeQ4+Q8mfbJhW1yKZnB8ZsJiC1fpnMEXnZ9wlXYAAAD//4dxzjoAAAAGSURBVAMARdooIYuCzXMAAAAASUVORK5CYII=";
+
+  // assets/textures/16px/destroy_stage_8.png
+  var destroy_stage_8_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABMUlEQVR4AaSTPUtCYRTHL9HSR2ht6GWMGiqIqGgpIoqgIWho8lM4+B1EBwVxE3xBRTcHFXTRWREcnAVHXf390SPe68sVlP/Pc+55zvnf5z5eD5w9P2aQw6cBfkp4G8zgk4U7KEEVNumGhQAsZAZWeCN5gBSYgiRRSMI5KCfM5DWYVR2nRtIDKcTXMfzBijYZhOkcQQd0xw/iWskgz0p6js5AA7q7hi+ou56Za5dkIPdvqkJnoIFTrrXtGNGrJgWdUYtYlwFxrU6oar1M1G60yyL5LfzANdyrgbiiApUh/MMr6FG0w3dyl8ygQlVDeqEi5IfQB1+ZwTOdGhoTzyADemkI22UGWdqO4BeeIA4D8JUZfNH5CKYuyQv4ygysUWfQ5mICO2nZQL+r/lRXTF7CTpoCAAD//zerNjgAAAAGSURBVAMAPwAu7cuWFHAAAAAASUVORK5CYII=";
+
+  // assets/textures/16px/destroy_stage_9.png
+  var destroy_stage_9_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABPUlEQVR4AYyTu0oDQRSGF7HxEWwtvJSihQoiKjaKiCJYCApWPoWF7yBaaKGd4AUV7Sy8oI3WXiBF6kDKpM33sZmQ3Vwmy//tOXvmzL+zs7t9SXq8pyF6/sx3BIMSAx8Q01++IRisMzADj/ACnTTFwD40FAxCYYVkDi4h6IDkBC5gFMwJqfIGaTVJXkn+QR1yGoQdaFEngyM6y/AD3nGN2FYa3DFyVcc9cIJ3d/IY9cwzc52RBrpvUhX3wAnDXLvsU2Jevkr36IuBNw2IbTVE1fEnoqtxlQ/k07AFkzBrA7FF91T8NvaIy+CjuMJV8ow00P2ZqpNuicfQDwWISgPdF+l0UoU4AtfgR0PoLg3OabmBAdiGBTiDIkSlwS5dGzAPQb8kSxCVBs1N7sE3hSr0pGDgkn2v/lQTzByHnlQDAAD//3/9QmYAAAAGSURBVAMAjE4zipLvzSkAAAAASUVORK5CYII=";
 
   // src/render/textures.js
   function createPixelTexture(dataUrl) {
@@ -19784,6 +19957,31 @@ void main() {
       default:
         return "stone";
     }
+  }
+  function createCrackMaterials() {
+    const crackUrls = [
+      destroy_stage_0_default,
+      destroy_stage_1_default,
+      destroy_stage_2_default,
+      destroy_stage_3_default,
+      destroy_stage_4_default,
+      destroy_stage_5_default,
+      destroy_stage_6_default,
+      destroy_stage_7_default,
+      destroy_stage_8_default,
+      destroy_stage_9_default
+    ];
+    return crackUrls.map((url) => {
+      const texture = createPixelTexture(url);
+      return new MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+    });
   }
 
   // src/render/scene.js
@@ -19880,8 +20078,47 @@ void main() {
       this.materials = createMaterials();
       this.worldGroup = new Group();
       this.scene.add(this.worldGroup);
+      this.crackMaterials = createCrackMaterials();
+      const crackGeom = new BoxGeometry(1.002, 1.002, 1.002);
+      this.crackMesh = new Mesh(crackGeom, this.crackMaterials[0]);
+      this.crackMesh.visible = false;
+      this.scene.add(this.crackMesh);
+      this.raycaster = new Raycaster();
+      this.crosshairCenter = new Vector2(0, 0);
       this.rebuildWorldMesh();
       window.addEventListener("resize", () => this.onResize());
+    }
+    getRaycastBlock(maxDistance = 5) {
+      this.raycaster.setFromCamera(this.crosshairCenter, this.camera);
+      this.raycaster.far = maxDistance;
+      const intersects = this.raycaster.intersectObjects(this.worldGroup.children);
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        const normal = hit.face.normal;
+        const bx = Math.floor(hit.point.x - normal.x * 0.01);
+        const by = Math.floor(hit.point.y - normal.y * 0.01);
+        const bz = Math.floor(hit.point.z - normal.z * 0.01);
+        return {
+          x: bx,
+          y: by,
+          z: bz,
+          distance: hit.distance,
+          normal: { x: normal.x, y: normal.y, z: normal.z }
+        };
+      }
+      return null;
+    }
+    updateCrack(target, stage) {
+      if (!target || stage < 0 || stage > 9) {
+        this.hideCrack();
+        return;
+      }
+      this.crackMesh.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
+      this.crackMesh.material = this.crackMaterials[stage];
+      this.crackMesh.visible = true;
+    }
+    hideCrack() {
+      this.crackMesh.visible = false;
     }
     onResize() {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -19979,6 +20216,7 @@ void main() {
       pitch: -0.2
     });
     const worldScene = new WorldScene(container, world);
+    const miningController = new MiningController(world);
     const keys = {
       w: false,
       a: false,
@@ -19986,6 +20224,7 @@ void main() {
       d: false,
       space: false
     };
+    let isMouseDown = false;
     function setKeyState(code, pressed) {
       switch (code) {
         case "KeyW":
@@ -20017,11 +20256,22 @@ void main() {
       keys.s = false;
       keys.d = false;
       keys.space = false;
+      isMouseDown = false;
     });
     const canvas = worldScene.renderer.domElement;
     document.addEventListener("click", () => {
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
+      }
+    });
+    window.addEventListener("mousedown", (e) => {
+      if (e.button === 0 && document.pointerLockElement === canvas) {
+        isMouseDown = true;
+      }
+    });
+    window.addEventListener("mouseup", (e) => {
+      if (e.button === 0) {
+        isMouseDown = false;
       }
     });
     document.addEventListener("pointerlockchange", () => {
@@ -20035,6 +20285,7 @@ void main() {
         keys.s = false;
         keys.d = false;
         keys.space = false;
+        isMouseDown = false;
       }
     });
     const MOUSE_SENSITIVITY = 22e-4;
@@ -20063,6 +20314,22 @@ void main() {
         player.vz = 0;
       }
       worldScene.updateCamera(player);
+      const hit = worldScene.getRaycastBlock(5);
+      const target = hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
+      const playerPos = { x: player.x, y: player.y, z: player.z };
+      const miningResult = miningController.update(dt, {
+        isMining: isMouseDown,
+        target,
+        playerPos
+      });
+      if (miningResult.broken) {
+        worldScene.rebuildWorldMesh();
+        worldScene.hideCrack();
+      } else if (miningController.progress > 0 && miningController.target) {
+        worldScene.updateCrack(miningController.target, miningController.stage);
+      } else {
+        worldScene.hideCrack();
+      }
       worldScene.render();
     }
     requestAnimationFrame(animate);

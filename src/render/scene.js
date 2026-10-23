@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BLOCK_TYPES } from '../logic/world.js';
-import { createMaterials, getFaceTextureKey } from './textures.js';
+import { createMaterials, createCrackMaterials, getFaceTextureKey } from './textures.js';
 
 const FACES = [
   {
@@ -103,9 +103,53 @@ export class WorldScene {
     this.worldGroup = new THREE.Group();
     this.scene.add(this.worldGroup);
 
+    this.crackMaterials = createCrackMaterials();
+    const crackGeom = new THREE.BoxGeometry(1.002, 1.002, 1.002);
+    this.crackMesh = new THREE.Mesh(crackGeom, this.crackMaterials[0]);
+    this.crackMesh.visible = false;
+    this.scene.add(this.crackMesh);
+
+    this.raycaster = new THREE.Raycaster();
+    this.crosshairCenter = new THREE.Vector2(0, 0);
+
     this.rebuildWorldMesh();
 
     window.addEventListener('resize', () => this.onResize());
+  }
+
+  getRaycastBlock(maxDistance = 5) {
+    this.raycaster.setFromCamera(this.crosshairCenter, this.camera);
+    this.raycaster.far = maxDistance;
+    const intersects = this.raycaster.intersectObjects(this.worldGroup.children);
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const normal = hit.face.normal;
+      const bx = Math.floor(hit.point.x - normal.x * 0.01);
+      const by = Math.floor(hit.point.y - normal.y * 0.01);
+      const bz = Math.floor(hit.point.z - normal.z * 0.01);
+      return {
+        x: bx,
+        y: by,
+        z: bz,
+        distance: hit.distance,
+        normal: { x: normal.x, y: normal.y, z: normal.z },
+      };
+    }
+    return null;
+  }
+
+  updateCrack(target, stage) {
+    if (!target || stage < 0 || stage > 9) {
+      this.hideCrack();
+      return;
+    }
+    this.crackMesh.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
+    this.crackMesh.material = this.crackMaterials[stage];
+    this.crackMesh.visible = true;
+  }
+
+  hideCrack() {
+    this.crackMesh.visible = false;
   }
 
   onResize() {

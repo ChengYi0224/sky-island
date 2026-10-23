@@ -12,6 +12,17 @@ import leavesUrl from '../../assets/textures/16px/leaves.png';
 import planksUrl from '../../assets/textures/16px/planks.png';
 import brickUrl from '../../assets/textures/16px/brick.png';
 
+import crack0Url from '../../assets/textures/16px/destroy_stage_0.png';
+import crack1Url from '../../assets/textures/16px/destroy_stage_1.png';
+import crack2Url from '../../assets/textures/16px/destroy_stage_2.png';
+import crack3Url from '../../assets/textures/16px/destroy_stage_3.png';
+import crack4Url from '../../assets/textures/16px/destroy_stage_4.png';
+import crack5Url from '../../assets/textures/16px/destroy_stage_5.png';
+import crack6Url from '../../assets/textures/16px/destroy_stage_6.png';
+import crack7Url from '../../assets/textures/16px/destroy_stage_7.png';
+import crack8Url from '../../assets/textures/16px/destroy_stage_8.png';
+import crack9Url from '../../assets/textures/16px/destroy_stage_9.png';
+
 function createPixelTexture(dataUrl) {
   const image = new Image();
   const texture = new THREE.Texture(image);
@@ -72,4 +83,31 @@ export function getFaceTextureKey(blockType, faceDir) {
     default:
       return 'stone';
   }
+}
+
+export function createCrackMaterials() {
+  const crackUrls = [
+    crack0Url,
+    crack1Url,
+    crack2Url,
+    crack3Url,
+    crack4Url,
+    crack5Url,
+    crack6Url,
+    crack7Url,
+    crack8Url,
+    crack9Url,
+  ];
+
+  return crackUrls.map((url) => {
+    const texture = createPixelTexture(url);
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+  });
 }

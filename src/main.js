@@ -1,5 +1,6 @@
 import { World, generateIsland } from './logic/world.js';
 import { Player } from './logic/player.js';
+import { MiningController } from './logic/mining.js';
 import { WorldScene } from './render/scene.js';
 
 const SPAWN_POS = { x: 16.5, y: 13, z: 16.5 };
@@ -20,6 +21,7 @@ function initGame() {
   });
 
   const worldScene = new WorldScene(container, world);
+  const miningController = new MiningController(world);
 
   const keys = {
     w: false,
@@ -28,6 +30,7 @@ function initGame() {
     d: false,
     space: false,
   };
+  let isMouseDown = false;
 
   function setKeyState(code, pressed) {
     switch (code) {
@@ -63,6 +66,7 @@ function initGame() {
     keys.s = false;
     keys.d = false;
     keys.space = false;
+    isMouseDown = false;
   });
 
   const canvas = worldScene.renderer.domElement;
@@ -70,6 +74,18 @@ function initGame() {
   document.addEventListener('click', () => {
     if (document.pointerLockElement !== canvas) {
       canvas.requestPointerLock();
+    }
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 0 && document.pointerLockElement === canvas) {
+      isMouseDown = true;
+    }
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {
+      isMouseDown = false;
     }
   });
 
@@ -84,6 +100,7 @@ function initGame() {
       keys.s = false;
       keys.d = false;
       keys.space = false;
+      isMouseDown = false;
     }
   });
 
@@ -120,6 +137,26 @@ function initGame() {
     }
 
     worldScene.updateCamera(player);
+
+    const hit = worldScene.getRaycastBlock(5);
+    const target = hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
+    const playerPos = { x: player.x, y: player.y, z: player.z };
+
+    const miningResult = miningController.update(dt, {
+      isMining: isMouseDown,
+      target,
+      playerPos,
+    });
+
+    if (miningResult.broken) {
+      worldScene.rebuildWorldMesh();
+      worldScene.hideCrack();
+    } else if (miningController.progress > 0 && miningController.target) {
+      worldScene.updateCrack(miningController.target, miningController.stage);
+    } else {
+      worldScene.hideCrack();
+    }
+
     worldScene.render();
   }
 
