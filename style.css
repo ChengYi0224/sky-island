@@ -1,0 +1,92 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #bfe0f4;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#game-container {
+  width: 100vw;
+  height: 100vh;
+}
+
+#game-container canvas {
+  display: block;
+}
+
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+#crosshair::before,
+#crosshair::after {
+  content: "";
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+#crosshair::before {
+  top: 7px;
+  left: 0;
+  width: 16px;
+  height: 2px;
+}
+
+#crosshair::after {
+  top: 0;
+  left: 7px;
+  width: 2px;
+  height: 16px;
+}
+
+#prompt-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.35);
+  z-index: 20;
+  cursor: pointer;
+}
+
+.prompt-box {
+  background-color: rgba(20, 25, 35, 0.85);
+  color: #ffffff;
+  padding: 24px 32px;
+  border-radius: 8px;
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.prompt-box h1 {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.prompt-box p {
+  font-size: 15px;
+  margin-top: 6px;
+}
+
+.controls-hint {
+  color: #cbd5e1;
+  font-size: 13px;
+}

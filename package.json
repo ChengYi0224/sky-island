@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "build": "esbuild src/main.js --bundle --format=iife --outfile=dist/bundle.js"
+    "build": "esbuild src/main.js --bundle --format=iife --loader:.png=dataurl --outfile=dist/bundle.js"
   },
   "dependencies": {
     "three": "^0.170.0"
