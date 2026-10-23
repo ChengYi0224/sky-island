@@ -1,6 +1,7 @@
 import { World, generateIsland } from './logic/world.js';
 import { Player } from './logic/player.js';
 import { MiningController } from './logic/mining.js';
+import { DropManager } from './logic/drops.js';
 import { WorldScene } from './render/scene.js';
 
 const SPAWN_POS = { x: 16.5, y: 13, z: 16.5 };
@@ -22,6 +23,7 @@ function initGame() {
 
   const worldScene = new WorldScene(container, world);
   const miningController = new MiningController(world);
+  const dropManager = new DropManager(world);
 
   const keys = {
     w: false,
@@ -149,6 +151,12 @@ function initGame() {
     });
 
     if (miningResult.broken) {
+      dropManager.spawn(
+        miningResult.target.x,
+        miningResult.target.y,
+        miningResult.target.z,
+        miningResult.blockType
+      );
       worldScene.rebuildWorldMesh();
       worldScene.hideCrack();
     } else if (miningController.progress > 0 && miningController.target) {
@@ -156,6 +164,9 @@ function initGame() {
     } else {
       worldScene.hideCrack();
     }
+
+    dropManager.update(dt);
+    worldScene.updateDrops(dropManager.drops);
 
     worldScene.render();
   }

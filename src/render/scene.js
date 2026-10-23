@@ -109,6 +109,11 @@ export class WorldScene {
     this.crackMesh.visible = false;
     this.scene.add(this.crackMesh);
 
+    this.dropsGroup = new THREE.Group();
+    this.scene.add(this.dropsGroup);
+    this.dropMeshes = new Map();
+    this.dropGeometry = new THREE.BoxGeometry(0.28, 0.28, 0.28);
+
     this.raycaster = new THREE.Raycaster();
     this.crosshairCenter = new THREE.Vector2(0, 0);
 
@@ -150,6 +155,36 @@ export class WorldScene {
 
   hideCrack() {
     this.crackMesh.visible = false;
+  }
+
+  createDropMesh(type) {
+    const faceDirs = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+    const mats = faceDirs.map(
+      (dir) => this.materials[getFaceTextureKey(type, dir)]
+    );
+    return new THREE.Mesh(this.dropGeometry, mats);
+  }
+
+  updateDrops(drops) {
+    const activeDrops = new Set(drops);
+
+    for (const [drop, mesh] of this.dropMeshes.entries()) {
+      if (!activeDrops.has(drop)) {
+        this.dropsGroup.remove(mesh);
+        this.dropMeshes.delete(drop);
+      }
+    }
+
+    for (const drop of drops) {
+      let mesh = this.dropMeshes.get(drop);
+      if (!mesh) {
+        mesh = this.createDropMesh(drop.type);
+        this.dropMeshes.set(drop, mesh);
+        this.dropsGroup.add(mesh);
+      }
+      mesh.position.set(drop.x, drop.y + 0.14, drop.z);
+      mesh.rotation.y = drop.rotation;
+    }
   }
 
   onResize() {
