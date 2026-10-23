@@ -1,8 +1,9 @@
-import { World, generateIsland } from './logic/world.js';
+import { World, BLOCK_TYPES, generateIsland } from './logic/world.js';
 import { Player } from './logic/player.js';
 import { MiningController } from './logic/mining.js';
 import { DropManager } from './logic/drops.js';
 import { Inventory } from './logic/inventory.js';
+import { SandManager } from './logic/sand.js';
 import { WorldScene } from './render/scene.js';
 import { Hud } from './render/hud.js';
 
@@ -26,6 +27,7 @@ function initGame() {
   const worldScene = new WorldScene(container, world);
   const miningController = new MiningController(world);
   const dropManager = new DropManager(world);
+  const sandManager = new SandManager(world);
   const inventory = new Inventory(9);
   const hud = new Hud(inventory);
 
@@ -129,6 +131,12 @@ function initGame() {
           normal
         );
         if (success) {
+          const placeX = Math.round(hit.x + normal.x);
+          const placeY = Math.round(hit.y + normal.y);
+          const placeZ = Math.round(hit.z + normal.z);
+          if (world.getBlock(placeX, placeY, placeZ) === BLOCK_TYPES.SAND) {
+            sandManager.triggerFall(placeX, placeY, placeZ);
+          }
           worldScene.rebuildWorldMesh();
           hud.update();
         }
@@ -208,6 +216,11 @@ function initGame() {
         miningResult.target.z + 0.5,
         miningResult.blockType
       );
+      sandManager.onBlockBreak(
+        miningResult.target.x,
+        miningResult.target.y,
+        miningResult.target.z
+      );
       worldScene.rebuildWorldMesh();
       worldScene.hideCrack();
     } else if (miningController.progress > 0 && miningController.target) {
@@ -216,10 +229,16 @@ function initGame() {
       worldScene.hideCrack();
     }
 
+    const sandResult = sandManager.update(dt);
+    if (sandResult.landed) {
+      worldScene.rebuildWorldMesh();
+    }
+
     dropManager.update(dt, playerPos, inventory);
     hud.update();
 
     worldScene.updateDrops(dropManager.drops);
+    worldScene.updateSandEntities(sandManager.entities);
     worldScene.updateFlyingPickups(dt, playerPos);
 
     worldScene.render();

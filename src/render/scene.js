@@ -115,6 +115,11 @@ export class WorldScene {
     this.dropGeometry = new THREE.BoxGeometry(0.28, 0.28, 0.28);
     this.flyingPickups = [];
 
+    this.sandGroup = new THREE.Group();
+    this.scene.add(this.sandGroup);
+    this.sandMeshes = new Map();
+    this.sandGeometry = new THREE.BoxGeometry(1, 1, 1);
+
     this.raycaster = new THREE.Raycaster();
     this.crosshairCenter = new THREE.Vector2(0, 0);
 
@@ -185,6 +190,27 @@ export class WorldScene {
       }
       mesh.position.set(drop.x, drop.y + 0.14, drop.z);
       mesh.rotation.y = drop.rotation;
+    }
+  }
+
+  updateSandEntities(sandEntities) {
+    const activeSand = new Set(sandEntities);
+
+    for (const [entity, mesh] of this.sandMeshes.entries()) {
+      if (!activeSand.has(entity)) {
+        this.sandGroup.remove(mesh);
+        this.sandMeshes.delete(entity);
+      }
+    }
+
+    for (const entity of sandEntities) {
+      let mesh = this.sandMeshes.get(entity);
+      if (!mesh) {
+        mesh = new THREE.Mesh(this.sandGeometry, this.materials['sand']);
+        this.sandMeshes.set(entity, mesh);
+        this.sandGroup.add(mesh);
+      }
+      mesh.position.set(entity.x + 0.5, entity.y + 0.5, entity.z + 0.5);
     }
   }
 

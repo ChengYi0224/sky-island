@@ -600,6 +600,114 @@
     }
   };
 
+  // src/logic/sand.js
+  var SAND_GRAVITY = 20;
+  var SAND_MAX_SPEED = 16;
+  var SandEntity = class {
+    constructor(x, y, z) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      this.fallSpeed = 0;
+      this.vy = 0;
+    }
+  };
+  var SandManager = class {
+    constructor(world) {
+      this.world = world;
+      this.entities = [];
+      this.onSandLanded = null;
+    }
+    spawn(x, y, z) {
+      const entity = new SandEntity(x, y, z);
+      this.entities.push(entity);
+      return entity;
+    }
+    triggerFall(x, y, z) {
+      const ix = Math.round(x);
+      const iy = Math.round(y);
+      const iz = Math.round(z);
+      if (this.world.getBlock(ix, iy, iz) !== BLOCK_TYPES.SAND) {
+        return false;
+      }
+      let bottomY = iy;
+      while (bottomY > 0 && this.world.getBlock(ix, bottomY - 1, iz) === BLOCK_TYPES.SAND) {
+        bottomY--;
+      }
+      if (this.world.isSolid(ix, bottomY - 1, iz)) {
+        return false;
+      }
+      let currY = bottomY;
+      let triggered = false;
+      while (currY < this.world.height && this.world.getBlock(ix, currY, iz) === BLOCK_TYPES.SAND) {
+        this.world.setBlock(ix, currY, iz, BLOCK_TYPES.AIR);
+        this.spawn(ix, currY, iz);
+        triggered = true;
+        currY++;
+      }
+      return triggered;
+    }
+    checkAndTrigger(x, y, z) {
+      return this.triggerFall(x, y, z);
+    }
+    checkBlock(x, y, z) {
+      return this.triggerFall(x, y, z);
+    }
+    onBlockBreak(x, y, z) {
+      const ix = Math.round(x);
+      const iy = Math.round(y);
+      const iz = Math.round(z);
+      return this.triggerFall(ix, iy + 1, iz);
+    }
+    update(dt) {
+      if (dt <= 0 || this.entities.length === 0) {
+        return { landed: false, landedCount: 0 };
+      }
+      let landedCount = 0;
+      const sorted = [...this.entities].sort((a, b) => a.y - b.y);
+      const toRemove = /* @__PURE__ */ new Set();
+      for (const entity of sorted) {
+        if (toRemove.has(entity)) {
+          continue;
+        }
+        entity.fallSpeed = Math.min(entity.fallSpeed + SAND_GRAVITY * dt, SAND_MAX_SPEED);
+        entity.vy = -entity.fallSpeed;
+        const bx = Math.round(entity.x);
+        const bz = Math.round(entity.z);
+        let landingY = -Infinity;
+        const startCheckY = Math.floor(entity.y - 1e-4);
+        for (let cy = startCheckY; cy >= 0; cy--) {
+          if (this.world.isSolid(bx, cy, bz)) {
+            landingY = cy + 1;
+            break;
+          }
+        }
+        const nextY = entity.y - entity.fallSpeed * dt;
+        if (nextY <= landingY) {
+          toRemove.add(entity);
+          if (landingY >= 0 && landingY < this.world.height) {
+            this.world.setBlock(bx, landingY, bz, BLOCK_TYPES.SAND);
+            landedCount++;
+            if (typeof this.onSandLanded === "function") {
+              this.onSandLanded(bx, landingY, bz);
+            }
+          }
+        } else if (nextY < -10) {
+          toRemove.add(entity);
+        } else {
+          entity.y = nextY;
+        }
+      }
+      if (toRemove.size > 0) {
+        this.entities = this.entities.filter((e) => !toRemove.has(e));
+      }
+      return {
+        landed: landedCount > 0,
+        landedCount
+      };
+    }
+  };
+
   // node_modules/three/build/three.module.js
   var REVISION = "170";
   var CullFaceNone = 0;
@@ -20346,6 +20454,10 @@ void main() {
       this.dropMeshes = /* @__PURE__ */ new Map();
       this.dropGeometry = new BoxGeometry(0.28, 0.28, 0.28);
       this.flyingPickups = [];
+      this.sandGroup = new Group();
+      this.scene.add(this.sandGroup);
+      this.sandMeshes = /* @__PURE__ */ new Map();
+      this.sandGeometry = new BoxGeometry(1, 1, 1);
       this.raycaster = new Raycaster();
       this.crosshairCenter = new Vector2(0, 0);
       this.rebuildWorldMesh();
@@ -20407,6 +20519,24 @@ void main() {
         }
         mesh.position.set(drop.x, drop.y + 0.14, drop.z);
         mesh.rotation.y = drop.rotation;
+      }
+    }
+    updateSandEntities(sandEntities) {
+      const activeSand = new Set(sandEntities);
+      for (const [entity, mesh] of this.sandMeshes.entries()) {
+        if (!activeSand.has(entity)) {
+          this.sandGroup.remove(mesh);
+          this.sandMeshes.delete(entity);
+        }
+      }
+      for (const entity of sandEntities) {
+        let mesh = this.sandMeshes.get(entity);
+        if (!mesh) {
+          mesh = new Mesh(this.sandGeometry, this.materials["sand"]);
+          this.sandMeshes.set(entity, mesh);
+          this.sandGroup.add(mesh);
+        }
+        mesh.position.set(entity.x + 0.5, entity.y + 0.5, entity.z + 0.5);
       }
     }
     triggerPickup(x, y, z, type) {
@@ -20635,6 +20765,7 @@ void main() {
     const worldScene = new WorldScene(container, world);
     const miningController = new MiningController(world);
     const dropManager = new DropManager(world);
+    const sandManager = new SandManager(world);
     const inventory = new Inventory(9);
     const hud = new Hud(inventory);
     dropManager.onPickup = (drop) => {
@@ -20725,6 +20856,12 @@ void main() {
             normal
           );
           if (success) {
+            const placeX = Math.round(hit.x + normal.x);
+            const placeY = Math.round(hit.y + normal.y);
+            const placeZ = Math.round(hit.z + normal.z);
+            if (world.getBlock(placeX, placeY, placeZ) === BLOCK_TYPES.SAND) {
+              sandManager.triggerFall(placeX, placeY, placeZ);
+            }
             worldScene.rebuildWorldMesh();
             hud.update();
           }
@@ -20791,6 +20928,11 @@ void main() {
           miningResult.target.z + 0.5,
           miningResult.blockType
         );
+        sandManager.onBlockBreak(
+          miningResult.target.x,
+          miningResult.target.y,
+          miningResult.target.z
+        );
         worldScene.rebuildWorldMesh();
         worldScene.hideCrack();
       } else if (miningController.progress > 0 && miningController.target) {
@@ -20798,9 +20940,14 @@ void main() {
       } else {
         worldScene.hideCrack();
       }
+      const sandResult = sandManager.update(dt);
+      if (sandResult.landed) {
+        worldScene.rebuildWorldMesh();
+      }
       dropManager.update(dt, playerPos, inventory);
       hud.update();
       worldScene.updateDrops(dropManager.drops);
+      worldScene.updateSandEntities(sandManager.entities);
       worldScene.updateFlyingPickups(dt, playerPos);
       worldScene.render();
     }
