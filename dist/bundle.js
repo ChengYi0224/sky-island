@@ -12,6 +12,11 @@
     PLANKS: 7,
     BRICK: 8
   });
+  var SPAWN_POINT = Object.freeze({
+    x: 11.5,
+    y: 13,
+    z: 16.5
+  });
   var World = class {
     constructor(width = WORLD_SIZE, height = WORLD_SIZE, depth = WORLD_SIZE) {
       this.width = width;
@@ -115,6 +120,42 @@
             world.setBlock(x, y, z, BLOCK_TYPES.STONE);
           }
         }
+      }
+    }
+    const minX = 13;
+    const maxX = 17;
+    const minZ = 14;
+    const maxZ = 18;
+    for (const x of [minX, maxX]) {
+      for (const z of [minZ, maxZ]) {
+        for (let y = 13; y <= 15; y++) {
+          world.setBlock(x, y, z, BLOCK_TYPES.LOG);
+        }
+      }
+    }
+    for (let x = minX + 1; x <= maxX - 1; x++) {
+      for (let y = 13; y <= 15; y++) {
+        world.setBlock(x, y, minZ, BLOCK_TYPES.BRICK);
+        world.setBlock(x, y, maxZ, BLOCK_TYPES.BRICK);
+      }
+    }
+    for (let z = minZ + 1; z <= maxZ - 1; z++) {
+      for (let y = 13; y <= 15; y++) {
+        world.setBlock(maxX, y, z, BLOCK_TYPES.BRICK);
+      }
+    }
+    for (let z = minZ + 1; z <= maxZ - 1; z++) {
+      if (z === 16) {
+        world.setBlock(minX, 15, z, BLOCK_TYPES.BRICK);
+      } else {
+        for (let y = 13; y <= 15; y++) {
+          world.setBlock(minX, y, z, BLOCK_TYPES.BRICK);
+        }
+      }
+    }
+    for (let x = minX; x <= maxX; x++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        world.setBlock(x, 16, z, BLOCK_TYPES.PLANKS);
       }
     }
   }
@@ -20749,16 +20790,15 @@ void main() {
   };
 
   // src/main.js
-  var SPAWN_POS = { x: 16.5, y: 13, z: 16.5 };
   function initGame() {
     const container = document.getElementById("game-container");
     const promptOverlay = document.getElementById("prompt-overlay");
     const world = new World();
     generateIsland(world);
     const player = new Player(world, {
-      x: SPAWN_POS.x,
-      y: SPAWN_POS.y,
-      z: SPAWN_POS.z,
+      x: SPAWN_POINT.x,
+      y: SPAWN_POINT.y,
+      z: SPAWN_POINT.z,
       yaw: 0,
       pitch: -0.2
     });
@@ -20905,9 +20945,9 @@ void main() {
       const dt = Math.min(rawDt, 0.05);
       player.update(dt, keys);
       if (player.y < -10) {
-        player.x = SPAWN_POS.x;
-        player.y = SPAWN_POS.y;
-        player.z = SPAWN_POS.z;
+        player.x = SPAWN_POINT.x;
+        player.y = SPAWN_POINT.y;
+        player.z = SPAWN_POINT.z;
         player.vx = 0;
         player.vy = 0;
         player.vz = 0;

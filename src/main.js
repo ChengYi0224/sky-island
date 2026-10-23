@@ -1,4 +1,4 @@
-import { World, BLOCK_TYPES, generateIsland } from './logic/world.js';
+import { World, BLOCK_TYPES, generateIsland, SPAWN_POINT } from './logic/world.js';
 import { Player } from './logic/player.js';
 import { MiningController } from './logic/mining.js';
 import { DropManager } from './logic/drops.js';
@@ -6,8 +6,6 @@ import { Inventory } from './logic/inventory.js';
 import { SandManager } from './logic/sand.js';
 import { WorldScene } from './render/scene.js';
 import { Hud } from './render/hud.js';
-
-const SPAWN_POS = { x: 16.5, y: 13, z: 16.5 };
 
 function initGame() {
   const container = document.getElementById('game-container');
@@ -17,9 +15,9 @@ function initGame() {
   generateIsland(world);
 
   const player = new Player(world, {
-    x: SPAWN_POS.x,
-    y: SPAWN_POS.y,
-    z: SPAWN_POS.z,
+    x: SPAWN_POINT.x,
+    y: SPAWN_POINT.y,
+    z: SPAWN_POINT.z,
     yaw: 0,
     pitch: -0.2,
   });
@@ -189,9 +187,9 @@ function initGame() {
     player.update(dt, keys);
 
     if (player.y < -10) {
-      player.x = SPAWN_POS.x;
-      player.y = SPAWN_POS.y;
-      player.z = SPAWN_POS.z;
+      player.x = SPAWN_POINT.x;
+      player.y = SPAWN_POINT.y;
+      player.z = SPAWN_POINT.z;
       player.vx = 0;
       player.vy = 0;
       player.vz = 0;

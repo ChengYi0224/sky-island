@@ -12,6 +12,12 @@ export const BLOCK_TYPES = Object.freeze({
   BRICK: 8,
 });
 
+export const SPAWN_POINT = Object.freeze({
+  x: 11.5,
+  y: 13,
+  z: 16.5,
+});
+
 export class World {
   constructor(width = WORLD_SIZE, height = WORLD_SIZE, depth = WORLD_SIZE) {
     this.width = width;
@@ -137,6 +143,48 @@ export function generateIsland(world) {
           world.setBlock(x, y, z, BLOCK_TYPES.STONE);
         }
       }
+    }
+  }
+
+  const minX = 13;
+  const maxX = 17;
+  const minZ = 14;
+  const maxZ = 18;
+
+  for (const x of [minX, maxX]) {
+    for (const z of [minZ, maxZ]) {
+      for (let y = 13; y <= 15; y++) {
+        world.setBlock(x, y, z, BLOCK_TYPES.LOG);
+      }
+    }
+  }
+
+  for (let x = minX + 1; x <= maxX - 1; x++) {
+    for (let y = 13; y <= 15; y++) {
+      world.setBlock(x, y, minZ, BLOCK_TYPES.BRICK);
+      world.setBlock(x, y, maxZ, BLOCK_TYPES.BRICK);
+    }
+  }
+
+  for (let z = minZ + 1; z <= maxZ - 1; z++) {
+    for (let y = 13; y <= 15; y++) {
+      world.setBlock(maxX, y, z, BLOCK_TYPES.BRICK);
+    }
+  }
+
+  for (let z = minZ + 1; z <= maxZ - 1; z++) {
+    if (z === 16) {
+      world.setBlock(minX, 15, z, BLOCK_TYPES.BRICK);
+    } else {
+      for (let y = 13; y <= 15; y++) {
+        world.setBlock(minX, y, z, BLOCK_TYPES.BRICK);
+      }
+    }
+  }
+
+  for (let x = minX; x <= maxX; x++) {
+    for (let z = minZ; z <= maxZ; z++) {
+      world.setBlock(x, 16, z, BLOCK_TYPES.PLANKS);
     }
   }
 }
