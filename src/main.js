@@ -64,10 +64,30 @@ function initGame() {
 
   window.addEventListener('keydown', (e) => {
     setKeyState(e.code, true);
+
+    if (e.key >= '1' && e.key <= '9') {
+      const slotIndex = parseInt(e.key, 10) - 1;
+      inventory.selectSlot(slotIndex);
+      hud.update();
+    }
   });
 
   window.addEventListener('keyup', (e) => {
     setKeyState(e.code, false);
+  });
+
+  window.addEventListener('wheel', (e) => {
+    if (e.deltaY > 0) {
+      inventory.scrollSlot(1);
+      hud.update();
+    } else if (e.deltaY < 0) {
+      inventory.scrollSlot(-1);
+      hud.update();
+    }
+  }, { passive: true });
+
+  window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
   });
 
   window.addEventListener('blur', () => {
@@ -88,8 +108,31 @@ function initGame() {
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && document.pointerLockElement === canvas) {
+    if (document.pointerLockElement !== canvas) {
+      return;
+    }
+
+    if (e.button === 0) {
       isMouseDown = true;
+    } else if (e.button === 2) {
+      const hit = worldScene.getRaycastBlock(5);
+      if (hit) {
+        const normal = {
+          x: Math.round(hit.normal.x),
+          y: Math.round(hit.normal.y),
+          z: Math.round(hit.normal.z),
+        };
+        const success = inventory.placeBlock(
+          world,
+          player,
+          { x: hit.x, y: hit.y, z: hit.z },
+          normal
+        );
+        if (success) {
+          worldScene.rebuildWorldMesh();
+          hud.update();
+        }
+      }
     }
   });
 

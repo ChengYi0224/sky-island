@@ -65,6 +65,36 @@ export class World {
   isSolid(x, y, z) {
     return this.getBlock(x, y, z) !== BLOCK_TYPES.AIR;
   }
+
+  canPlaceBlock(x, y, z, player = null) {
+    if (!this.isInBounds(x, y, z)) {
+      return false;
+    }
+    if (this.getBlock(x, y, z) !== BLOCK_TYPES.AIR) {
+      return false;
+    }
+    if (player) {
+      const box = typeof player.getBoundingBox === 'function'
+        ? player.getBoundingBox()
+        : {
+            minX: player.x - (player.width ?? 0.6) / 2,
+            maxX: player.x + (player.width ?? 0.6) / 2,
+            minY: player.y,
+            maxY: player.y + (player.height ?? 1.8),
+            minZ: player.z - (player.width ?? 0.6) / 2,
+            maxZ: player.z + (player.width ?? 0.6) / 2,
+          };
+
+      const overlapX = box.minX < x + 1 && box.maxX > x;
+      const overlapY = box.minY < y + 1 && box.maxY > y;
+      const overlapZ = box.minZ < z + 1 && box.maxZ > z;
+
+      if (overlapX && overlapY && overlapZ) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 export function generateIsland(world) {

@@ -84,4 +84,55 @@ export class Inventory {
       this.selectedIndex = index;
     }
   }
+
+  scrollSlot(delta) {
+    if (!Number.isFinite(delta) || delta === 0) {
+      return;
+    }
+    this.selectedIndex =
+      (((this.selectedIndex + delta) % this.slotCount) + this.slotCount) %
+      this.slotCount;
+  }
+
+  placeBlock(world, player, targetBlock, normal) {
+    if (!world || !targetBlock || !normal) {
+      return false;
+    }
+
+    const slot = this.getSelectedSlot();
+    if (!slot || slot.count <= 0 || !slot.type) {
+      return false;
+    }
+
+    if (player) {
+      const dist = Math.hypot(
+        targetBlock.x - player.x,
+        targetBlock.y - player.y,
+        targetBlock.z - player.z
+      );
+      if (dist > 4.0) {
+        return false;
+      }
+    }
+
+    const placeX = Math.round(targetBlock.x + normal.x);
+    const placeY = Math.round(targetBlock.y + normal.y);
+    const placeZ = Math.round(targetBlock.z + normal.z);
+
+    if (!world.canPlaceBlock(placeX, placeY, placeZ, player)) {
+      return false;
+    }
+
+    const placed = world.setBlock(placeX, placeY, placeZ, slot.type);
+    if (!placed) {
+      return false;
+    }
+
+    slot.count -= 1;
+    if (slot.count === 0) {
+      slot.type = null;
+    }
+
+    return true;
+  }
 }

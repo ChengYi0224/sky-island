@@ -53,6 +53,31 @@
     isSolid(x, y, z) {
       return this.getBlock(x, y, z) !== BLOCK_TYPES.AIR;
     }
+    canPlaceBlock(x, y, z, player = null) {
+      if (!this.isInBounds(x, y, z)) {
+        return false;
+      }
+      if (this.getBlock(x, y, z) !== BLOCK_TYPES.AIR) {
+        return false;
+      }
+      if (player) {
+        const box = typeof player.getBoundingBox === "function" ? player.getBoundingBox() : {
+          minX: player.x - (player.width ?? 0.6) / 2,
+          maxX: player.x + (player.width ?? 0.6) / 2,
+          minY: player.y,
+          maxY: player.y + (player.height ?? 1.8),
+          minZ: player.z - (player.width ?? 0.6) / 2,
+          maxZ: player.z + (player.width ?? 0.6) / 2
+        };
+        const overlapX = box.minX < x + 1 && box.maxX > x;
+        const overlapY = box.minY < y + 1 && box.maxY > y;
+        const overlapZ = box.minZ < z + 1 && box.maxZ > z;
+        if (overlapX && overlapY && overlapZ) {
+          return false;
+        }
+      }
+      return true;
+    }
   };
   function generateIsland(world) {
     const cx = Math.floor(world.width / 2);
@@ -414,6 +439,46 @@
       if (index >= 0 && index < this.slots.length) {
         this.selectedIndex = index;
       }
+    }
+    scrollSlot(delta) {
+      if (!Number.isFinite(delta) || delta === 0) {
+        return;
+      }
+      this.selectedIndex = ((this.selectedIndex + delta) % this.slotCount + this.slotCount) % this.slotCount;
+    }
+    placeBlock(world, player, targetBlock, normal) {
+      if (!world || !targetBlock || !normal) {
+        return false;
+      }
+      const slot = this.getSelectedSlot();
+      if (!slot || slot.count <= 0 || !slot.type) {
+        return false;
+      }
+      if (player) {
+        const dist = Math.hypot(
+          targetBlock.x - player.x,
+          targetBlock.y - player.y,
+          targetBlock.z - player.z
+        );
+        if (dist > 4) {
+          return false;
+        }
+      }
+      const placeX = Math.round(targetBlock.x + normal.x);
+      const placeY = Math.round(targetBlock.y + normal.y);
+      const placeZ = Math.round(targetBlock.z + normal.z);
+      if (!world.canPlaceBlock(placeX, placeY, placeZ, player)) {
+        return false;
+      }
+      const placed = world.setBlock(placeX, placeY, placeZ, slot.type);
+      if (!placed) {
+        return false;
+      }
+      slot.count -= 1;
+      if (slot.count === 0) {
+        slot.type = null;
+      }
+      return true;
     }
   };
 
@@ -20604,9 +20669,26 @@ void main() {
     }
     window.addEventListener("keydown", (e) => {
       setKeyState(e.code, true);
+      if (e.key >= "1" && e.key <= "9") {
+        const slotIndex = parseInt(e.key, 10) - 1;
+        inventory.selectSlot(slotIndex);
+        hud.update();
+      }
     });
     window.addEventListener("keyup", (e) => {
       setKeyState(e.code, false);
+    });
+    window.addEventListener("wheel", (e) => {
+      if (e.deltaY > 0) {
+        inventory.scrollSlot(1);
+        hud.update();
+      } else if (e.deltaY < 0) {
+        inventory.scrollSlot(-1);
+        hud.update();
+      }
+    }, { passive: true });
+    window.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
     });
     window.addEventListener("blur", () => {
       keys.w = false;
@@ -20623,8 +20705,30 @@ void main() {
       }
     });
     window.addEventListener("mousedown", (e) => {
-      if (e.button === 0 && document.pointerLockElement === canvas) {
+      if (document.pointerLockElement !== canvas) {
+        return;
+      }
+      if (e.button === 0) {
         isMouseDown = true;
+      } else if (e.button === 2) {
+        const hit = worldScene.getRaycastBlock(5);
+        if (hit) {
+          const normal = {
+            x: Math.round(hit.normal.x),
+            y: Math.round(hit.normal.y),
+            z: Math.round(hit.normal.z)
+          };
+          const success = inventory.placeBlock(
+            world,
+            player,
+            { x: hit.x, y: hit.y, z: hit.z },
+            normal
+          );
+          if (success) {
+            worldScene.rebuildWorldMesh();
+            hud.update();
+          }
+        }
       }
     });
     window.addEventListener("mouseup", (e) => {
