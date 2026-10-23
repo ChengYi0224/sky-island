@@ -30,6 +30,7 @@ export class Hud {
     this.healthSystem = healthSystem;
     this.container = container;
     this.slotElements = [];
+    this.lastDamageCount = this.healthSystem ? (this.healthSystem.damageCount ?? 0) : 0;
 
     this._createDom();
     this.update();
@@ -37,7 +38,25 @@ export class Hud {
 
   setHealthSystem(healthSystem) {
     this.healthSystem = healthSystem;
+    this.lastDamageCount = this.healthSystem ? (this.healthSystem.damageCount ?? 0) : 0;
     this.update();
+  }
+
+  triggerDamageFeedback() {
+    if (typeof document === 'undefined') return;
+
+    const flashEl = document.getElementById('damage-flash');
+    if (flashEl) {
+      flashEl.classList.remove('flash');
+      void flashEl.offsetWidth;
+      flashEl.classList.add('flash');
+    }
+
+    if (this.healthElement) {
+      this.healthElement.classList.remove('damaged');
+      void this.healthElement.offsetWidth;
+      this.healthElement.classList.add('damaged');
+    }
   }
 
   _createDom() {
@@ -92,6 +111,14 @@ export class Hud {
         const current = Math.max(0, Math.round(this.healthSystem.health));
         const max = this.healthSystem.maxHealth ?? 20;
         this.healthElement.textContent = `HP ${current}/${max}`;
+
+        const damageCount = this.healthSystem.damageCount ?? 0;
+        if (damageCount > this.lastDamageCount) {
+          this.lastDamageCount = damageCount;
+          this.triggerDamageFeedback();
+        } else if (damageCount < this.lastDamageCount) {
+          this.lastDamageCount = damageCount;
+        }
       } else {
         this.healthElement.textContent = 'HP 20/20';
       }

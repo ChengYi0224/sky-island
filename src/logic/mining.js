@@ -42,9 +42,9 @@ export class MiningController {
   }
 
   update(dt, options = {}) {
-    const { isMining = false, target = null, playerPos = null } = options;
+    const { isMining = false, target = null, playerPos = null, dead = false } = options;
 
-    if (!isMining || !target || !playerPos) {
+    if (dead || !isMining || !target || !playerPos) {
       this.reset();
       return { broken: false };
     }

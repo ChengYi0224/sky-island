@@ -56,6 +56,28 @@ body {
   height: 16px;
 }
 
+#damage-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  box-shadow: inset 0 0 90px 35px rgba(230, 20, 20, 0.75);
+}
+
+#damage-flash.flash {
+  animation: damage-flash-fade 0.3s ease-out forwards;
+}
+
+@keyframes damage-flash-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 #health-display {
   position: fixed;
   bottom: 80px;
@@ -75,6 +97,33 @@ body {
   text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
   z-index: 15;
   pointer-events: none;
+}
+
+#health-display.damaged {
+  animation: hp-damage-shake 0.3s ease-in-out;
+  color: #ff1a1a;
+  border-color: rgba(255, 60, 60, 0.8);
+}
+
+@keyframes hp-damage-shake {
+  0% {
+    transform: translateX(calc(-50% - 6px));
+  }
+  20% {
+    transform: translateX(calc(-50% + 6px));
+  }
+  40% {
+    transform: translateX(calc(-50% - 4px));
+  }
+  60% {
+    transform: translateX(calc(-50% + 4px));
+  }
+  80% {
+    transform: translateX(calc(-50% - 2px));
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 #hotbar {
@@ -163,4 +212,37 @@ body {
 .controls-hint {
   color: #cbd5e1;
   font-size: 13px;
+}
+
+#death-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(45, 0, 0, 0.75);
+  z-index: 30;
+  cursor: pointer;
+}
+
+.death-box {
+  text-align: center;
+  color: #ffffff;
+  user-select: none;
+}
+
+.death-box h1 {
+  font-size: 54px;
+  font-weight: 900;
+  color: #ff3333;
+  margin-bottom: 12px;
+  letter-spacing: 4px;
+  text-shadow: 2px 2px 8px #000000;
+}
+
+.death-box p {
+  font-size: 20px;
+  color: #f1f5f9;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 4px #000000;
 }

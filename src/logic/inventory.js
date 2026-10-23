@@ -99,6 +99,10 @@ export class Inventory {
       return false;
     }
 
+    if (player && player.dead) {
+      return false;
+    }
+
     const slot = this.getSelectedSlot();
     if (!slot || slot.count <= 0 || !slot.type) {
       return false;

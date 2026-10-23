@@ -25,6 +25,7 @@ export class Player {
 
     this.maxHealth = options.maxHealth ?? 20;
     this.health = options.health ?? this.maxHealth;
+    this.dead = options.dead ?? false;
   }
 
   getBoundingBox(x = this.x, y = this.y, z = this.z) {
@@ -40,6 +41,9 @@ export class Player {
   }
 
   update(dt, input = {}) {
+    if (this.dead) {
+      return;
+    }
     if (!Number.isFinite(dt) || dt <= 0) {
       return;
     }

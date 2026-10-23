@@ -11,6 +11,7 @@ import { Hud } from './render/hud.js';
 function initGame() {
   const container = document.getElementById('game-container');
   const promptOverlay = document.getElementById('prompt-overlay');
+  const deathOverlay = document.getElementById('death-overlay');
 
   const world = new World();
   generateIsland(world);
@@ -44,6 +45,25 @@ function initGame() {
   };
   let isMouseDown = false;
 
+  function handleRespawn() {
+    if (!healthSystem.isDead()) {
+      return;
+    }
+    healthSystem.respawn();
+    if (deathOverlay) {
+      deathOverlay.style.display = 'none';
+    }
+    isMouseDown = false;
+    miningController.reset();
+    worldScene.hideCrack();
+    keys.w = false;
+    keys.a = false;
+    keys.s = false;
+    keys.d = false;
+    keys.space = false;
+    hud.update();
+  }
+
   function setKeyState(code, pressed) {
     switch (code) {
       case 'KeyW':
@@ -65,6 +85,11 @@ function initGame() {
   }
 
   window.addEventListener('keydown', (e) => {
+    if (healthSystem.isDead()) {
+      handleRespawn();
+      return;
+    }
+
     setKeyState(e.code, true);
 
     if (e.key >= '1' && e.key <= '9') {
@@ -104,12 +129,20 @@ function initGame() {
   const canvas = worldScene.renderer.domElement;
 
   document.addEventListener('click', () => {
+    if (healthSystem.isDead()) {
+      handleRespawn();
+    }
     if (document.pointerLockElement !== canvas) {
       canvas.requestPointerLock();
     }
   });
 
   window.addEventListener('mousedown', (e) => {
+    if (healthSystem.isDead()) {
+      handleRespawn();
+      return;
+    }
+
     if (document.pointerLockElement !== canvas) {
       return;
     }
@@ -186,6 +219,23 @@ function initGame() {
     lastTime = now;
     const dt = Math.min(rawDt, 0.05);
 
+    const isDead = healthSystem.isDead();
+    if (isDead) {
+      keys.w = false;
+      keys.a = false;
+      keys.s = false;
+      keys.d = false;
+      keys.space = false;
+      isMouseDown = false;
+      if (deathOverlay) {
+        deathOverlay.style.display = 'flex';
+      }
+    } else {
+      if (deathOverlay) {
+        deathOverlay.style.display = 'none';
+      }
+    }
+
     player.update(dt, keys);
 
     if (player.y < -10) {
@@ -207,6 +257,7 @@ function initGame() {
       isMining: isMouseDown,
       target,
       playerPos,
+      dead: isDead,
     });
 
     if (miningResult.broken) {

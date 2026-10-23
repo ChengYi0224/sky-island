@@ -183,6 +183,7 @@
       this.onGround = false;
       this.maxHealth = options.maxHealth ?? 20;
       this.health = options.health ?? this.maxHealth;
+      this.dead = options.dead ?? false;
     }
     getBoundingBox(x = this.x, y = this.y, z = this.z) {
       const halfW = this.width / 2;
@@ -196,6 +197,9 @@
       };
     }
     update(dt, input = {}) {
+      if (this.dead) {
+        return;
+      }
       if (!Number.isFinite(dt) || dt <= 0) {
         return;
       }
@@ -381,8 +385,8 @@
       this.elapsedTime = 0;
     }
     update(dt, options = {}) {
-      const { isMining = false, target = null, playerPos = null } = options;
-      if (!isMining || !target || !playerPos) {
+      const { isMining = false, target = null, playerPos = null, dead = false } = options;
+      if (dead || !isMining || !target || !playerPos) {
         this.reset();
         return { broken: false };
       }
@@ -501,6 +505,9 @@
     }
     placeBlock(world, player, targetBlock, normal) {
       if (!world || !targetBlock || !normal) {
+        return false;
+      }
+      if (player && player.dead) {
         return false;
       }
       const slot = this.getSelectedSlot();
@@ -769,13 +776,23 @@
     constructor(player, world, options = {}) {
       this.player = player;
       this.world = world;
+      this.options = options;
       this.maxHealth = options.maxHealth ?? MAX_HEALTH;
       this.health = options.health ?? this.maxHealth;
       this.suffocationTimer = 0;
+      this.spawn = options.spawn ?? SPAWN_POINT;
+      this.onDamage = options.onDamage ?? null;
+      this.time = 0;
+      this.damageCount = 0;
+      this.lastDamageTime = null;
       if (this.player) {
         this.player.maxHealth = this.maxHealth;
         this.player.health = this.health;
+        this.player.dead = this.isDead();
       }
+    }
+    isDead() {
+      return this.health <= 0;
     }
     isSuffocating() {
       if (!this.player || !this.world) {
@@ -792,12 +809,25 @@
       return isSand;
     }
     takeDamage(amount) {
+      if (this.isDead()) {
+        return;
+      }
       if (!Number.isFinite(amount) || amount <= 0) {
         return;
       }
-      this.health = Math.max(0, this.health - amount);
+      const actualDamage = Math.min(this.health, amount);
+      if (actualDamage <= 0) {
+        return;
+      }
+      this.health = Math.max(0, this.health - actualDamage);
+      this.damageCount += 1;
+      this.lastDamageTime = this.time;
       if (this.player) {
         this.player.health = this.health;
+        this.player.dead = this.isDead();
+      }
+      if (typeof this.onDamage === "function") {
+        this.onDamage(actualDamage);
       }
     }
     heal(amount) {
@@ -807,6 +837,7 @@
       this.health = Math.min(this.maxHealth, this.health + amount);
       if (this.player) {
         this.player.health = this.health;
+        this.player.dead = this.isDead();
       }
     }
     reset() {
@@ -814,10 +845,30 @@
       this.suffocationTimer = 0;
       if (this.player) {
         this.player.health = this.health;
+        this.player.dead = false;
+      }
+    }
+    respawn() {
+      this.health = this.maxHealth;
+      this.suffocationTimer = 0;
+      if (this.player) {
+        const spawn = this.spawn;
+        this.player.x = spawn.x;
+        this.player.y = spawn.y;
+        this.player.z = spawn.z;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.player.vz = 0;
+        this.player.dead = false;
+        this.player.health = this.maxHealth;
       }
     }
     update(dt) {
       if (!Number.isFinite(dt) || dt <= 0) {
+        return;
+      }
+      this.time += dt;
+      if (this.isDead()) {
         return;
       }
       if (!this.isSuffocating()) {
@@ -828,6 +879,9 @@
       while (this.suffocationTimer >= SUFFOCATION_INTERVAL - 1e-9) {
         this.suffocationTimer = Math.max(0, this.suffocationTimer - SUFFOCATION_INTERVAL);
         this.takeDamage(SUFFOCATION_DAMAGE);
+        if (this.isDead()) {
+          break;
+        }
       }
     }
   };
@@ -20820,12 +20874,28 @@ void main() {
       this.healthSystem = healthSystem;
       this.container = container;
       this.slotElements = [];
+      this.lastDamageCount = this.healthSystem ? this.healthSystem.damageCount ?? 0 : 0;
       this._createDom();
       this.update();
     }
     setHealthSystem(healthSystem) {
       this.healthSystem = healthSystem;
+      this.lastDamageCount = this.healthSystem ? this.healthSystem.damageCount ?? 0 : 0;
       this.update();
+    }
+    triggerDamageFeedback() {
+      if (typeof document === "undefined") return;
+      const flashEl = document.getElementById("damage-flash");
+      if (flashEl) {
+        flashEl.classList.remove("flash");
+        void flashEl.offsetWidth;
+        flashEl.classList.add("flash");
+      }
+      if (this.healthElement) {
+        this.healthElement.classList.remove("damaged");
+        void this.healthElement.offsetWidth;
+        this.healthElement.classList.add("damaged");
+      }
     }
     _createDom() {
       let healthEl = document.getElementById("health-display");
@@ -20871,6 +20941,13 @@ void main() {
           const current = Math.max(0, Math.round(this.healthSystem.health));
           const max = this.healthSystem.maxHealth ?? 20;
           this.healthElement.textContent = `HP ${current}/${max}`;
+          const damageCount = this.healthSystem.damageCount ?? 0;
+          if (damageCount > this.lastDamageCount) {
+            this.lastDamageCount = damageCount;
+            this.triggerDamageFeedback();
+          } else if (damageCount < this.lastDamageCount) {
+            this.lastDamageCount = damageCount;
+          }
         } else {
           this.healthElement.textContent = "HP 20/20";
         }
@@ -20902,6 +20979,7 @@ void main() {
   function initGame() {
     const container = document.getElementById("game-container");
     const promptOverlay = document.getElementById("prompt-overlay");
+    const deathOverlay = document.getElementById("death-overlay");
     const world = new World();
     generateIsland(world);
     const player = new Player(world, {
@@ -20929,6 +21007,24 @@ void main() {
       space: false
     };
     let isMouseDown = false;
+    function handleRespawn() {
+      if (!healthSystem.isDead()) {
+        return;
+      }
+      healthSystem.respawn();
+      if (deathOverlay) {
+        deathOverlay.style.display = "none";
+      }
+      isMouseDown = false;
+      miningController.reset();
+      worldScene.hideCrack();
+      keys.w = false;
+      keys.a = false;
+      keys.s = false;
+      keys.d = false;
+      keys.space = false;
+      hud.update();
+    }
     function setKeyState(code, pressed) {
       switch (code) {
         case "KeyW":
@@ -20949,6 +21045,10 @@ void main() {
       }
     }
     window.addEventListener("keydown", (e) => {
+      if (healthSystem.isDead()) {
+        handleRespawn();
+        return;
+      }
       setKeyState(e.code, true);
       if (e.key >= "1" && e.key <= "9") {
         const slotIndex = parseInt(e.key, 10) - 1;
@@ -20981,11 +21081,18 @@ void main() {
     });
     const canvas = worldScene.renderer.domElement;
     document.addEventListener("click", () => {
+      if (healthSystem.isDead()) {
+        handleRespawn();
+      }
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
       }
     });
     window.addEventListener("mousedown", (e) => {
+      if (healthSystem.isDead()) {
+        handleRespawn();
+        return;
+      }
       if (document.pointerLockElement !== canvas) {
         return;
       }
@@ -21053,6 +21160,22 @@ void main() {
       const rawDt = (now - lastTime) / 1e3;
       lastTime = now;
       const dt = Math.min(rawDt, 0.05);
+      const isDead = healthSystem.isDead();
+      if (isDead) {
+        keys.w = false;
+        keys.a = false;
+        keys.s = false;
+        keys.d = false;
+        keys.space = false;
+        isMouseDown = false;
+        if (deathOverlay) {
+          deathOverlay.style.display = "flex";
+        }
+      } else {
+        if (deathOverlay) {
+          deathOverlay.style.display = "none";
+        }
+      }
       player.update(dt, keys);
       if (player.y < -10) {
         player.x = SPAWN_POINT.x;
@@ -21069,7 +21192,8 @@ void main() {
       const miningResult = miningController.update(dt, {
         isMining: isMouseDown,
         target,
-        playerPos
+        playerPos,
+        dead: isDead
       });
       if (miningResult.broken) {
         dropManager.spawn(
