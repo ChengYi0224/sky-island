@@ -265,3 +265,34 @@
 - `PLANS.md`
 
 - [x] 這步完成
+
+---
+
+## STEP 5c：HP 歸零的死亡畫面與重生、受傷閃紅（使用者玩出來的 bug 和問題）
+
+### 要做什麼
+- `src/logic/health.js` 加：
+  - `isDead()`：HP 為 0 就是死亡。死亡後 `takeDamage` 無效，血量不會變負、也不會再扣。
+  - `respawn()`：回到出生點、HP 回到 20、速度歸零、窒息計時歸零；背包不動（不做掉落）。
+  - 受傷事件：每次真的扣到血，記下 `lastDamageTime`（或發出受傷事件），給畫面閃紅用。
+- 死亡時不能移動、挖、放：`src/main.js` 在死亡時不更新玩家移動、不處理挖方塊與放方塊。
+- 畫面（`src/render/hud.js`、`index.html`、`style.css`、`src/main.js`）：
+  - 死亡畫面：半透明深色蓋住畫面，中間寫「你死了」和「點一下重生」；點一下（或按任意鍵）重生。
+  - 受傷回饋：每次扣血，畫面邊緣閃紅約 0.3 秒淡出，HP 文字同時變紅並抖一下。只用 CSS，不加新圖片。
+- 不做：音效、死亡掉落物、其他傷害來源。
+
+### 對到 VERIFY.md 的哪幾條
+- [ ] （使用者回報的 bug）HP 歸零 → 畫面出現「你死了」，點一下回到出生點、HP 回到 20；不可以：歸零後還能繼續走、挖或血量變負的
+- [ ] （使用者回報的問題）窒息扣血時 → 畫面邊緣閃紅、HP 文字變紅一下；不可以：扣血時畫面沒有任何變化
+
+### 會動哪些檔
+- `src/logic/health.js`
+- `src/main.js`
+- `src/render/hud.js`
+- `index.html`
+- `style.css`
+- `tests/health-death.test.js`
+- `dist/bundle.js`
+- `PLANS.md`
+
+- [ ] 這步完成
